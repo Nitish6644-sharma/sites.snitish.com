@@ -1,0 +1,191 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>CopilotKit + LangGraph: how the pieces connect</title>
+<style>
+  :root {
+    --bg: #eef2f6;
+    --ink: #1b2a41;
+    --muted: #55627a;
+    --line: #c5cfdc;
+    --browser: #1f7a8c;
+    --runtime: #4b4e9e;
+    --agent: #2f6b4f;
+    --paid: #8a6a1f;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    padding: 40px 20px 56px;
+    background: var(--bg);
+    color: var(--ink);
+    font-family: "Avenir Next", "Segoe UI", system-ui, sans-serif;
+    line-height: 1.5;
+  }
+  .wrap { max-width: 1040px; margin: 0 auto; }
+  h1 { font-size: 1.6rem; margin: 0 0 4px; letter-spacing: -0.01em; }
+  .sub { color: var(--muted); margin: 0 0 32px; max-width: 60ch; }
+  code, .pkg { font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace; font-size: 0.82rem; }
+
+  .diagram {
+    display: grid;
+    grid-template-columns: 1fr 120px 1fr 120px 1fr;
+    align-items: stretch;
+    gap: 0;
+  }
+  .box {
+    background: #fff;
+    border: 2px solid var(--c);
+    border-radius: 10px;
+    padding: 18px 18px 20px;
+  }
+  .box.browser { --c: var(--browser); }
+  .box.runtime { --c: var(--runtime); }
+  .box.agent   { --c: var(--agent); }
+  .box h2 { margin: 0; font-size: 1.05rem; color: var(--c); }
+  .where { margin: 2px 0 14px; font-size: 0.85rem; color: var(--muted); }
+  .box ul { list-style: none; margin: 0; padding: 0; display: grid; gap: 10px; }
+  .box li { font-size: 0.9rem; }
+  .pkg {
+    display: inline-block;
+    background: color-mix(in srgb, var(--c) 10%, white);
+    color: var(--c);
+    padding: 1px 6px;
+    border-radius: 4px;
+    margin-bottom: 2px;
+    word-break: break-all;
+  }
+
+  .link {
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    align-items: center;
+    text-align: center;
+    padding: 0 6px;
+    font-size: 0.8rem;
+    color: var(--muted);
+    gap: 6px;
+  }
+  .link strong { color: var(--ink); font-size: 0.85rem; }
+  .arrows { width: 100%; display: grid; gap: 8px; }
+  .arrow { position: relative; height: 2px; background: var(--ink); }
+  .arrow::after {
+    content: "";
+    position: absolute; top: -4px;
+    border: 5px solid transparent;
+  }
+  .arrow.fwd::after { right: -1px; border-left: 9px solid var(--ink); border-right: 0; }
+  .arrow.back::after { left: -1px; border-right: 9px solid var(--ink); border-left: 0; }
+
+  .flow { margin-top: 36px; }
+  .flow h3 { font-size: 1rem; margin: 0 0 12px; }
+  ol.steps {
+    margin: 0; padding: 0; list-style: none;
+    display: grid; grid-template-columns: repeat(5, 1fr); gap: 10px;
+  }
+  ol.steps li {
+    background: #fff;
+    border: 1px solid var(--line);
+    border-radius: 8px;
+    padding: 12px;
+    font-size: 0.85rem;
+  }
+  ol.steps b { display: block; margin-bottom: 4px; }
+
+  .note {
+    margin-top: 28px;
+    padding: 14px 16px;
+    border-left: 4px solid var(--paid);
+    background: #fff;
+    border-radius: 0 8px 8px 0;
+    font-size: 0.88rem;
+    max-width: 78ch;
+  }
+  .note b { color: var(--paid); }
+
+  @media (max-width: 860px) {
+    .diagram { grid-template-columns: 1fr; }
+    .link { padding: 14px 0; flex-direction: row; justify-content: center; gap: 14px; }
+    .arrows { width: 60px; grid-auto-flow: column; gap: 14px; }
+    .arrow { width: 2px; height: 36px; }
+    .arrow.fwd::after { top: auto; bottom: -1px; left: -4px; right: auto; border: 5px solid transparent; border-top: 9px solid var(--ink); border-bottom: 0; }
+    .arrow.back::after { top: -1px; left: -4px; border: 5px solid transparent; border-bottom: 9px solid var(--ink); border-top: 0; }
+    ol.steps { grid-template-columns: 1fr; }
+  }
+  @media (prefers-reduced-motion: no-preference) { html { scroll-behavior: smooth; } }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>CopilotKit + LangGraph: how the pieces connect</h1>
+  <p class="sub">A React banking app with a chat sidebar, a small runtime route on the server, and your LangGraph agent.</p>
+
+  <div class="diagram">
+    <div class="box browser">
+      <h2>Your React app</h2>
+      <p class="where">Runs in the browser</p>
+      <ul>
+        <li><span class="pkg">@copilotkit/react-core</span><br>Provider, chat sidebar, <code>useAgent</code> hook</li>
+        <li>Your 5-step form, reading its values from shared agent state</li>
+      </ul>
+    </div>
+
+    <div class="link">
+      <strong>HTTP</strong>
+      <div class="arrows">
+        <div class="arrow fwd"></div>
+        <div class="arrow back"></div>
+      </div>
+      <span>messages and state go out, events stream back</span>
+    </div>
+
+    <div class="box runtime">
+      <h2>Copilot Runtime</h2>
+      <p class="where">Runs on your server, e.g. <code>/api/copilotkit</code></p>
+      <ul>
+        <li><span class="pkg">@copilotkit/runtime</span><br>Gateway between the browser and the agent</li>
+        <li><span class="pkg">@copilotkit/runtime/langgraph</span><br><code>LangGraphAgent</code> (in-process) or <code>LangGraphHttpAgent</code> (remote)</li>
+        <li>Good place to check login and permissions</li>
+      </ul>
+    </div>
+
+    <div class="link">
+      <strong>AG-UI</strong>
+      <div class="arrows">
+        <div class="arrow fwd"></div>
+        <div class="arrow back"></div>
+      </div>
+      <span>the event protocol: text, tool calls, state deltas</span>
+    </div>
+
+    <div class="box agent">
+      <h2>Your LangGraph agent</h2>
+      <p class="where">Your server, LangGraph Platform, or LangSmith</p>
+      <ul>
+        <li>Your graph, nodes and tools, unchanged</li>
+        <li><span class="pkg">@copilotkit/sdk-js</span><br><code>copilotkitMiddleware</code> for JS agents</li>
+        <li><span class="pkg">ag-ui-langgraph</span><br>For Python agents, served with FastAPI</li>
+      </ul>
+    </div>
+  </div>
+
+  <section class="flow">
+    <h3>What happens when the user says "fill step 1"</h3>
+    <ol class="steps">
+      <li><b>User types</b>in the chat sidebar</li>
+      <li><b>Runtime forwards</b>the message and current form state to the agent</li>
+      <li><b>Agent decides</b>the field values and emits a state update</li>
+      <li><b>Events stream back</b>as AG-UI state deltas</li>
+      <li><b>Form re-renders</b>with step 1 filled from shared state</li>
+    </ol>
+  </section>
+
+  <div class="note">
+    <b>Not in the open-source SDK:</b> CopilotKit Intelligence, which provides Rich Threads (saved, resumable conversations). You don't need it for two-way form state sync.
+  </div>
+</div>
+</body>
+</html>
